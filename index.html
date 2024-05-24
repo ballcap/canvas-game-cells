@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        canvas { border: solid 1px black; }
+        #instructions {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        #winScreen, #gameOverScreen {
+            display: none;
+            text-align: center;
+            font-size: 24px;
+            color: green;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #gameOverScreen {
+            color: red;
+        }
+    </style>
+    <title>Simple Game</title>
+</head>
+<body>
+<div id="instructions">Use arrow keys to move the red square to the top-left corner (0,0) to win! Avoid the enemy!</div>
+<canvas id="gameCanvas"></canvas>
+<div id="winScreen">You Win!</div>
+<div id="gameOverScreen">Game Over!</div>
+<script>
+    // Function to fetch the level from a JSON file and start the game
+    async function fetchLevelAndStartGame() {
+        try {
+            const response = await fetch('level.json');
+            const level = await response.json();
+            startGame(level);
+        } catch (error) {
+            console.error('Error loading level:', error);
+        }
+    }
+
+    function startGame(level) {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const cellSize = 50;
+        const rows = level.length;
+        const cols = level[0].length;
+        const winScreen = document.getElementById('winScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+
+        // Set canvas size based on level dimensions
+        canvas.width = cols * cellSize;
+        canvas.height = rows * cellSize;
+
+        let playerX = 6;
+        let playerY = 4;
+        let enemyX = 0;
+        let enemyY = 0;
+
+        // Load the tile image
+        const tileImage = new Image();
+        tileImage.src = 'tiles/green-tile.png';
+
+        tileImage.onload = function() {
+            // Draw the level once the image is loaded
+            drawLevel();
+            drawPlayer();
+            drawEnemy();
+        };
+
+        // Draw the level
+        function drawLevel() {
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    if (level[y][x] === 'X') {
+                        ctx.fillStyle = 'black';
+                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                    } else {
+                        ctx.drawImage(tileImage, x * cellSize, y * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+
+            // Highlight the target tile (0,0)
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, cellSize, cellSize);
+        }
+
+        // Draw the player
+        function drawPlayer() {
+            const offset = 10;
+            ctx.fillStyle = 'red';
+            ctx.fillRect(playerX * cellSize + offset / 2, playerY * cellSize + offset / 2, cellSize - offset, cellSize - offset);
+        }
+
+        // Draw the enemy
+        function drawEnemy() {
+            const offset = 10;
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(enemyX * cellSize + offset / 2, enemyY * cellSize + offset / 2, cellSize - offset, cellSize - offset);
+        }
+
+        // Move the player
+        function movePlayer(event) {
+            const moves = {
+                ArrowUp:    { x: 0, y: -1 },
+                ArrowDown:  { x: 0, y: 1 },
+                ArrowLeft:  { x: -1, y: 0 },
+                ArrowRight: { x: 1, y: 0 }
+            };
+
+            const move = moves[event.key];
+            if (!move) return;  // If the key is not an arrow key, exit the function
+
+            const newX = playerX + move.x;
+            const newY = playerY + move.y;
+
+            // Check if the new position is within bounds and not an obstacle
+            const isWithinBounds = newX >= 0 && newX < cols && newY >= 0 && newY < rows;
+            if (isWithinBounds && level[newY][newX] === '.') {
+                // Clear the current player position
+                ctx.drawImage(tileImage, playerX * cellSize, playerY * cellSize, cellSize, cellSize);
+
+                // Update player position
+                playerX = newX;
+                playerY = newY;
+
+                // Draw the player at the new position
+                drawPlayer();
+
+                // Move the enemy
+                moveEnemy();
+
+                // Check for win condition
+                if (playerX === 0 && playerY === 0) {
+                    displayWinScreen();
+                }
+
+                // Check for game over condition
+                if (playerX === enemyX && playerY === enemyY) {
+                    displayGameOverScreen();
+                }
+            }
+        }
+
+        // Move the enemy
+        function moveEnemy() {
+            // Clear the current enemy position
+            ctx.drawImage(tileImage, enemyX * cellSize, enemyY * cellSize, cellSize, cellSize);
+
+            const moves = [
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: 0 },
+                { x: 1, y: 0 }
+            ];
+
+            let validMove = false;
+            while (!validMove) {
+                const move = moves[Math.floor(Math.random() * moves.length)];
+                const newX = enemyX + move.x;
+                const newY = enemyY + move.y;
+
+                const isWithinBounds = newX >= 0 && newX < cols && newY >= 0 && newY < rows;
+                if (isWithinBounds && level[newY][newX] === '.') {
+                    enemyX = newX;
+                    enemyY = newY;
+                    validMove = true;
+                }
+            }
+
+            // Draw the enemy at the new position
+            drawEnemy();
+
+            // Check for game over condition after enemy moves
+            if (playerX === enemyX && playerY === enemyY) {
+                displayGameOverScreen();
+            }
+        }
+
+        // Display the win screen
+        function displayWinScreen() {
+            canvas.style.display = 'none';
+            winScreen.style.display = 'block';
+        }
+
+        // Display the game over screen
+        function displayGameOverScreen() {
+            canvas.style.display = 'none';
+            gameOverScreen.style.display = 'block';
+        }
+
+        // Initial drawing
+        window.addEventListener('keydown', movePlayer);
+    }
+
+    // Fetch the level and start the game
+    fetchLevelAndStartGame();
+</script>
+</body>
+</html>
